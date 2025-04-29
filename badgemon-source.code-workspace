@@ -1,0 +1,23 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../sasppu-test-cart"
+		},
+		{
+			"path": "../sasppu-mpy"
+		},
+		{
+			"path": "../sasppu"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"*.asm": "lldb.disassembly",
+			"sasppu_sprite.h": "c",
+			"sasppu_main_state.h": "c"
+		}
+	}
+}

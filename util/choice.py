@@ -9,11 +9,10 @@ if _sys_implementation.name != "micropython":
     ChoiceTree = Tuple[str, List[Tuple[str, Union['ChoiceTree', Callable]]]]
 from system.eventbus import eventbus
 from events.input import ButtonDownEvent, BUTTON_TYPES
-from app import App
+from app import App, SASPPUApp
 
 from ctx import Context
 from ..util.misc import *
-
 
 class ChoiceDialog:
     def _calc_sizes(self, ctx):
@@ -178,7 +177,7 @@ class ChoiceDialog:
         self.closed_event.clear()
         self.opened_event.clear()
 
-class ChoiceExample(App):
+class ChoiceExample(SASPPUApp):
     def __init__(self):
         self._choice = ChoiceDialog(
             app=self,
@@ -205,9 +204,6 @@ class ChoiceExample(App):
         while True:
             await asyncio.sleep(1)
             print("fps:", display.get_fps(), f"mem used: {gc.mem_alloc()}, mem free:{gc.mem_free()}")
-
-    def _draw_background(self, ctx: Context):
-        ctx.gray(0.9).rectangle(-120, -120, 240, 240).fill()
 
     def draw(self, ctx: Context):
         self._draw_background(ctx)
