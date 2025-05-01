@@ -16,9 +16,12 @@ STATE_CLOSING = 1
 STATE_OPEN = 2
 STATE_OPENING = 3
 
+LINE_HEIGHT = 20
+RESERVED_HEIGHT = LINE_HEIGHT*4
+RESERVED_START = sasppu.Background.HEIGHT - RESERVED_HEIGHT
+
 class SpeechDialog:
     def __init__(self, app: App, speech: str):
-        self.set_speech(speech)
         self._app = app
         self._open = False
         self._state = STATE_CLOSED
@@ -27,36 +30,57 @@ class SpeechDialog:
         self._ready_event.set()
         self._stay_open = False
 
+        self._sasppu_init()
+        self.set_speech(speech)
+
+    def _sasppu_init(self):
         self.ms = sasppu.MainState()
         self.ms.bind()
         self.cs = sasppu.CMathState()
         self.cs.bind()
         self.bg = sasppu.Background()
         self.bg.bind(1)
+        self.bg1 = sasppu.bg1
 
-        self._sasppu_init()
-
-    def _sasppu_init(self):
-        self.ms.flags |= sasppu.MainState.BG1_ENABLE
-        self.cs.flags = sasppu.CMathState.CMATH_ENABLE | sasppu.CMathState.SUB_SUB_SCREEN
-
-        self.ms.subscreen_colour = sasppu.grey555(10)
-
-        self.ms.window_2_left = 120
-        self.ms.window_2_right = 120
-
-        self.bg.windows = (sasppu.WINDOW_B | sasppu.WINDOW_AB) << 4
+        self.bg.windows = (sasppu.WINDOW_ALL) << 4
         self.bg.x = 0
         self.bg.y = 0
         self.bg.flags = 0
-
-        sasppu.fill_background(0, 0, self.bg0.WIDTH, self.bg0.HEIGHT, sasppu.TRANSPARENT_BLACK)
 
         for i in range(240):
             sasppu.hdma_7[i] = None
         sasppu.hdma_enable |= 0x80
 
-        sasppu.hdma_7[0]
+        ms = sasppu.MainState()
+        ms.bind(False)
+        ms.unbind()
+        cs = sasppu.CMathState()
+        cs.bind(False)
+        cs.unbind()
+
+        ms.flags &= (~sasppu.MainState.BG1_ENABLE) &0xFF
+        ms.subscreen_colour = sasppu.grey555(20)
+        cs.flags &= (~sasppu.CMathState.CMATH_ENABLE) &0xFF
+        cs.flags |= sasppu.CMathState.SUB_SUB_SCREEN
+
+        sasppu.hdma_7[0] = ms
+        sasppu.hdma_7[1] = cs
+
+        sasppu.hdma_7[140] = ms
+        sasppu.hdma_7[144] = cs
+
+        ms.flags |= sasppu.MainState.BG1_ENABLE
+        ms.subscreen_colour = sasppu.grey555(10)
+        cs.flags |= sasppu.CMathState.CMATH_ENABLE
+
+        sasppu.hdma_7[120] = ms
+        sasppu.hdma_7[116] = cs
+
+    def _write_bg1_map(self):
+        for y in range(RESERVED_HEIGHT // 8):
+            for x in range(240 // 8):
+                index = x + (y * self.bg1.WIDTH)
+                self.bg1[index] = (x + (y * 64 * 8)) * 4
 
     def is_open(self) -> bool:
         return self._open
@@ -93,10 +117,10 @@ class SpeechDialog:
             self._cleanup()
         self._goto_start()
 
-        sasppu.fill_background(0, 0, self.bg0.WIDTH, self.bg0.HEIGHT, sasppu.TRANSPARENT_BLACK)
+        sasppu.fill_background(0, RESERVED_START, 256, RESERVED_HEIGHT, sasppu.TRANSPARENT_BLACK)
 
-        for (i, line) in enumerate(self._lines):
-            sasppu.draw_text_background(0, i * 32, sasppu.WHITE, MAX_LINE_WIDTH, line, True)
+        for (i, line) in enumerate(self._lines)[:4]:
+            sasppu.draw_text_background(0, RESERVED_START + (i * LINE_HEIGHT), sasppu.WHITE, MAX_LINE_WIDTH, line, True)
 
     def _goto_start(self):
         if len(self._lines) < 2:
@@ -137,32 +161,8 @@ class SpeechDialog:
                 weight = math.pow(0.8, (delta/10))
                 self._current_line_visually = (self._current_line_visually * (weight)) + (self._current_line * (1-weight))
 
-    def _draw_focus_plane(self, height: float):
-        ctx.rgba(0.3, 0.3, 0.3, 0.8).rectangle(-120, (-BOX_HEIGHT)*height, 240, (BOX_HEIGHT*2)*height).fill()
-        col = ctx.rgba(0.2, 0.2, 0.2, 0.8)
-        col.move_to(-120,(-BOX_HEIGHT)*height).line_to(120,(-BOX_HEIGHT)*height).stroke()
-        col.move_to(-120,(BOX_HEIGHT)*height).line_to(120,(BOX_HEIGHT)*height).stroke()
-    def _draw_text(self, line: str, ypos: int):
-        ctx.gray(0.8).move_to(0, ypos).text(line)
-
     def draw(self):
-        if self.is_open():
-            ctx.save()
-            ctx.font_size = 25
-            ctx.text_baseline = Context.MIDDLE
-            ctx.text_align = Context.CENTER
-            if not self._lines:
-                
-            self._draw_focus_plane(ctx, self._opened_amount)
-            clip = ctx.rectangle(-120, (-BOX_HEIGHT)*self._opened_amount, 240, (BOX_HEIGHT*2)*self._opened_amount).clip()
-            for i, line in enumerate(self._lines):
-                ypos = (i-self._current_line_visually)*ctx.font_size
-                if ypos < -BOX_HEIGHT:
-                    continue
-                if ypos > BOX_HEIGHT:
-                    break
-                self._draw_text(clip, line, ypos)
-            ctx.restore()
+        pass
             
     def _handle_buttondown(self, event: ButtonDownEvent):
         if self.is_open() and not self._stay_open:
