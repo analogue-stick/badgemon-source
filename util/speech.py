@@ -36,52 +36,48 @@ class SpeechDialog:
 
     def _sasppu_init(self):
         self.ms = sasppu.MainState()
-        self.ms.bind()
+        self.ms.bind(False)
         self.cs = sasppu.CMathState()
-        self.cs.bind()
+        self.cs.bind(False)
         self.bg = sasppu.Background()
-        self.bg.bind(1)
+        self.bg.bind(1, False)
         self.bg1 = sasppu.bg1
 
-        self.bg.windows = (sasppu.WINDOW_ALL) << 4
+        self.bg.windows = (sasppu.WINDOW_ALL) << 4 | (sasppu.WINDOW_ALL)
         self.bg.x = -10
-        self.bg.y = -70
+        self.bg.y = -80
         self.bg.flags = 0
 
-        self.ms.flags |= sasppu.MainState.BG1_ENABLE | sasppu.MainState.CMATH_ENABLE
-        self.cs.flags = sasppu.CMathState.ADD_SUB_SCREEN # | sasppu.CMathState.HALF_MAIN_SCREEN | sasppu.CMathState.HALF_SUB_SCREEN
+        self.ms.flags = sasppu.MainState.BG1_ENABLE # | sasppu.MainState.CMATH_ENABLE
+        self.cs.flags = sasppu.CMathState.ADD_SUB_SCREEN #| sasppu.CMathState.HALF_MAIN_SCREEN | sasppu.CMathState.HALF_SUB_SCREEN
 
         self._write_bg1_map()
 
         sasppu.fill_background(0, 0, 256, 512, sasppu.BLUE)
 
-        #for i in range(240):
-        #    sasppu.hdma_7[i] = None
-        #sasppu.hdma_enable |= 0x80
-#
-        #ms = sasppu.MainState()
-        #ms.bind(False)
-        #ms.unbind()
-        #cs = sasppu.CMathState()
-        #cs.bind(False)
-        #cs.unbind()
-#
-        #ms.flags &= (~sasppu.MainState.BG1_ENABLE) &0xFF
-        #ms.subscreen_colour = sasppu.grey555(20)
+        for i in range(240):
+            sasppu.hdma_7[i] = (sasppu.HDMA_NOOP, 0)
+        sasppu.hdma_enable = 0x80
+
+        ms_flags = self.ms.flags & (~sasppu.MainState.BG1_ENABLE) &0xFF
+        ms_sub_col = sasppu.grey555(20)
         #cs.flags &= (~sasppu.CMathState.CMATH_ENABLE) &0xFF
         #cs.flags |= sasppu.CMathState.SUB_SUB_SCREEN
 #
-        #sasppu.hdma_7[0] = ms
+        sasppu.hdma_7[0] = (sasppu.HDMA_MAIN_STATE_FLAGS, ms_flags)
+        print(sasppu.hdma_7[0])
         #sasppu.hdma_7[1] = cs
 #
-        #sasppu.hdma_7[140] = ms
+        sasppu.hdma_7[140] = (sasppu.HDMA_MAIN_STATE_FLAGS, ms_flags)
+        print(sasppu.hdma_7[140])
         #sasppu.hdma_7[144] = cs
 #
-        #ms.flags |= sasppu.MainState.BG1_ENABLE
+        ms_flags |= sasppu.MainState.BG1_ENABLE
         #ms.subscreen_colour = sasppu.grey555(10)
         #cs.flags |= sasppu.CMathState.CMATH_ENABLE
 #
-        #sasppu.hdma_7[120] = ms
+        sasppu.hdma_7[120] = (sasppu.HDMA_MAIN_STATE_FLAGS, ms_flags)
+        print(sasppu.hdma_7[120])
         #sasppu.hdma_7[116] = cs
 
     def _write_bg1_map(self):
@@ -208,7 +204,7 @@ class SpeechExample(SASPPUApp):
         self.bg0 = sasppu.Background()
         self.bg0.bind(0)
 
-        self.ms.mainscreen_colour = sasppu.grey555_cmath(29)
+        self.ms.mainscreen_colour = sasppu.grey555_cmath(20)
 
         self._speech = SpeechDialog(
             app=self,
