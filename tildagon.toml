@@ -1,6 +1,6 @@
 [app]
 # The name of your app as displayed in the menu
-name = "Badgemon Green"
+name = "Badgemon Source"
 
 # The submenu where your app should appear.
 # One of: "Badge", "Music", "Media", "Apps", "Games"
@@ -18,7 +18,7 @@ wifi_preference = false
 
 [entry]
 # The name of your entry point `Application` class
-class = "SceneManager"
+class = "SpeechExample"
 
 [metadata]
 # Your nickname.  Must be at most 32 characters!

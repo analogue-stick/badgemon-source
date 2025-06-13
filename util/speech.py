@@ -32,6 +32,7 @@ class SpeechDialog:
 
         self._sasppu_init()
         self.set_speech(speech)
+        self.open()
 
     def _sasppu_init(self):
         self.ms = sasppu.MainState()
@@ -43,44 +44,53 @@ class SpeechDialog:
         self.bg1 = sasppu.bg1
 
         self.bg.windows = (sasppu.WINDOW_ALL) << 4
-        self.bg.x = 0
-        self.bg.y = 0
+        self.bg.x = -10
+        self.bg.y = -70
         self.bg.flags = 0
 
-        for i in range(240):
-            sasppu.hdma_7[i] = None
-        sasppu.hdma_enable |= 0x80
+        self.ms.flags |= sasppu.MainState.BG1_ENABLE | sasppu.MainState.CMATH_ENABLE
+        self.cs.flags = sasppu.CMathState.ADD_SUB_SCREEN # | sasppu.CMathState.HALF_MAIN_SCREEN | sasppu.CMathState.HALF_SUB_SCREEN
 
-        ms = sasppu.MainState()
-        ms.bind(False)
-        ms.unbind()
-        cs = sasppu.CMathState()
-        cs.bind(False)
-        cs.unbind()
+        self._write_bg1_map()
 
-        ms.flags &= (~sasppu.MainState.BG1_ENABLE) &0xFF
-        ms.subscreen_colour = sasppu.grey555(20)
-        cs.flags &= (~sasppu.CMathState.CMATH_ENABLE) &0xFF
-        cs.flags |= sasppu.CMathState.SUB_SUB_SCREEN
+        sasppu.fill_background(0, 0, 256, 512, sasppu.BLUE)
 
-        sasppu.hdma_7[0] = ms
-        sasppu.hdma_7[1] = cs
-
-        sasppu.hdma_7[140] = ms
-        sasppu.hdma_7[144] = cs
-
-        ms.flags |= sasppu.MainState.BG1_ENABLE
-        ms.subscreen_colour = sasppu.grey555(10)
-        cs.flags |= sasppu.CMathState.CMATH_ENABLE
-
-        sasppu.hdma_7[120] = ms
-        sasppu.hdma_7[116] = cs
+        #for i in range(240):
+        #    sasppu.hdma_7[i] = None
+        #sasppu.hdma_enable |= 0x80
+#
+        #ms = sasppu.MainState()
+        #ms.bind(False)
+        #ms.unbind()
+        #cs = sasppu.CMathState()
+        #cs.bind(False)
+        #cs.unbind()
+#
+        #ms.flags &= (~sasppu.MainState.BG1_ENABLE) &0xFF
+        #ms.subscreen_colour = sasppu.grey555(20)
+        #cs.flags &= (~sasppu.CMathState.CMATH_ENABLE) &0xFF
+        #cs.flags |= sasppu.CMathState.SUB_SUB_SCREEN
+#
+        #sasppu.hdma_7[0] = ms
+        #sasppu.hdma_7[1] = cs
+#
+        #sasppu.hdma_7[140] = ms
+        #sasppu.hdma_7[144] = cs
+#
+        #ms.flags |= sasppu.MainState.BG1_ENABLE
+        #ms.subscreen_colour = sasppu.grey555(10)
+        #cs.flags |= sasppu.CMathState.CMATH_ENABLE
+#
+        #sasppu.hdma_7[120] = ms
+        #sasppu.hdma_7[116] = cs
 
     def _write_bg1_map(self):
+        for x in range(len(self.bg1)):
+            self.bg1[x] = ((sasppu.Background.WIDTH - 8) * (sasppu.Background.HEIGHT - 8) // 8) * 4
         for y in range(RESERVED_HEIGHT // 8):
-            for x in range(240 // 8):
-                index = x + (y * self.bg1.WIDTH)
-                self.bg1[index] = (x + (y * 64 * 8)) * 4
+            for x in range(MAX_LINE_WIDTH // 8):
+                index = x + (y * sasppu.MAP_WIDTH)
+                self.bg1[index] = (((x * 8) + (((y * 8) + RESERVED_START) * sasppu.Background.WIDTH)) // 8) * 4
 
     def is_open(self) -> bool:
         return self._open
@@ -106,7 +116,8 @@ class SpeechDialog:
         self._lines: list[str] = []
         line = ""
         for word in speech.split():
-            if sasppu.get_text_size(3000, line+" "+word, True) < MAX_LINE_WIDTH:
+            (x,y) = sasppu.get_text_size(255, line+" "+word, True)
+            if x < MAX_LINE_WIDTH:
                 line = line + " " + word
             else:
                 self._lines.append(line)
@@ -115,12 +126,17 @@ class SpeechDialog:
             self._lines.append(line)
         if len(self._lines) == 0:
             self._cleanup()
+        print(self._lines)
         self._goto_start()
+        self._draw_text()
 
+    def _draw_text(self):
         sasppu.fill_background(0, RESERVED_START, 256, RESERVED_HEIGHT, sasppu.TRANSPARENT_BLACK)
-
-        for (i, line) in enumerate(self._lines)[:4]:
-            sasppu.draw_text_background(0, RESERVED_START + (i * LINE_HEIGHT), sasppu.WHITE, MAX_LINE_WIDTH, line, True)
+        start_index = max(0, int(math.floor(self._current_line)) - 1)
+        for (i, line) in enumerate(self._lines[start_index : start_index + 4]):
+            width = sasppu.get_text_size(255, line, True)[0]
+            offset_left = (MAX_LINE_WIDTH - width) // 2
+            sasppu.draw_text_background(offset_left, RESERVED_START + (i * LINE_HEIGHT) - 12, sasppu.WHITE, MAX_LINE_WIDTH, line, True)
 
     def _goto_start(self):
         if len(self._lines) < 2:
@@ -174,6 +190,7 @@ class SpeechDialog:
                 return
             else:
                 self._current_line += 1
+                self._draw_text()
 
     def _cleanup(self):
         eventbus.remove(ButtonDownEvent, self._handle_buttondown, self._app)
@@ -191,11 +208,11 @@ class SpeechExample(SASPPUApp):
         self.bg0 = sasppu.Background()
         self.bg0.bind(0)
 
-        self.ms.mainscreen_colour = sasppu.grey555(29)
+        self.ms.mainscreen_colour = sasppu.grey555_cmath(29)
 
         self._speech = SpeechDialog(
             app=self,
-            speech="Lorem ipsum dolor sit amet, consectetur adipiscing elit" #, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
+            speech="Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
         )
         eventbus.on(ButtonDownEvent, self._handle_buttondown, self)
 

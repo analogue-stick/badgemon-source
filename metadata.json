@@ -1,6 +1,6 @@
 {
-    "callable": "SceneManager",
-    "name": "Badgemon Green",
+    "callable": "SpeechExample",
+    "name": "Badgemon Source",
     "category": "Games",
     "logo": "assets/logo.png"
 }
