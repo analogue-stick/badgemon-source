@@ -57,7 +57,8 @@ class SpeechDialog:
 
         for i in range(240):
             sasppu.hdma_7[i] = (sasppu.HDMA_NOOP, 0)
-        sasppu.hdma_enable = 0x80
+        sasppu.set_hdma_enable(0x80)
+        print("HDMA enable python:", sasppu.get_hdma_enable())
 
         ms_flags = self.ms.flags & (~sasppu.MainState.BG1_ENABLE) &0xFF
         ms_sub_col = sasppu.grey555(20)
@@ -174,6 +175,7 @@ class SpeechDialog:
                 self._current_line_visually = (self._current_line_visually * (weight)) + (self._current_line * (1-weight))
 
     def draw(self):
+        print("HDMA enable python:", sasppu.get_hdma_enable())
         pass
             
     def _handle_buttondown(self, event: ButtonDownEvent):
@@ -196,7 +198,8 @@ class SpeechExample(SASPPUApp):
     def __init__(self):
         super().__init__()
         self.request_fast_updates = True
-
+        
+        sasppu.gfx_reset()
         self.ms = sasppu.MainState()
         self.ms.bind()
         self.cs = sasppu.CMathState()
