@@ -48,7 +48,7 @@ class SpeechDialog:
         self.bg.y = -80
         self.bg.flags = 0
 
-        self.ms.flags = sasppu.MainState.BG1_ENABLE # | sasppu.MainState.CMATH_ENABLE
+        self.ms.flags = sasppu.MainState.BG1_ENABLE | sasppu.MainState.CMATH_ENABLE
         self.cs.flags = sasppu.CMathState.ADD_SUB_SCREEN #| sasppu.CMathState.HALF_MAIN_SCREEN | sasppu.CMathState.HALF_SUB_SCREEN
 
         self._write_bg1_map()
