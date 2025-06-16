@@ -1,5 +1,7 @@
 import asyncio
 import math
+import display
+import gc
 
 from system.eventbus import eventbus
 from events.input import ButtonDownEvent
@@ -272,6 +274,11 @@ class SpeechExample(SASPPUApp):
 
     def update(self, delta: float):
         self._speech.update(delta)
+
+    async def background_task(self):
+        while True:
+            await asyncio.sleep(1)
+            print("fps:", display.get_fps(), f"mem used: {gc.mem_alloc()}, mem free:{gc.mem_free()}")
 
     def draw(self):
         self._speech.draw()

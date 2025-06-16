@@ -200,7 +200,7 @@ class ChoiceExample(SASPPUApp):
         print(f"ANSWER: {self.answer}")
         self._choice.update(delta)
 
-    async def background_update(self):
+    async def background_task(self):
         while True:
             await asyncio.sleep(1)
             print("fps:", display.get_fps(), f"mem used: {gc.mem_alloc()}, mem free:{gc.mem_free()}")
