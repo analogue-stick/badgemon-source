@@ -62,7 +62,7 @@ class SpeechDialog:
     def _fill_hdma(self):
         for i in range(240):
             sasppu.hdma_7[i] = (sasppu.HDMA_NOOP, 0)
-        sasppu.set_hdma_enable(sasppu.get_hdma_enable() | 0x80)
+        sasppu.hdma_enable |= 0x80
         
         height = int(self._opened_amount * BOX_HEIGHT)
         box_top = 120 - height
@@ -94,7 +94,7 @@ class SpeechDialog:
     def _clear_hdma(self):
         for i in range(240):
             sasppu.hdma_7[i] = (sasppu.HDMA_NOOP, 0)
-        sasppu.set_hdma_enable(sasppu.get_hdma_enable() & 0x7F)
+        sasppu.hdma_enable &= 0x7F
         self.ms.flags &= (~sasppu.MainState.BG1_ENABLE) & 0xFF
         self.cs.flags &= (~sasppu.CMathState.CMATH_ENABLE) & 0xFF
 
