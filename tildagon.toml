@@ -28,7 +28,7 @@ author = "Analogue Stick"
 license = "CC-BY-NC-SA-4.0"
 
 # URL to the repository of your app.
-url = "https://github.com/analogue-stick/badgemon"
+url = "https://github.com/analogue-stick/badgemon-source"
 
 # Description of your app.  Maximum 140 characters!
 description = "A realworld creature collecting RPG for the Tildagon!"

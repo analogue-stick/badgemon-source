@@ -1,7 +1,12 @@
 rm -rf ../flash
-mkdir -p ../flash/apps/analogue_stick_badgemon
-rsync -avs ../badgemon/ ../flash/apps/analogue_stick_badgemon
-cd ../flash/apps/analogue_stick_badgemon
-rm -rf .git* .vscode/ design/ docs/ TODO.md LICENCE *.ase *.gitignore README.md .env *.gitmodules flash.sh
+mkdir -p ../flash/apps/badgemon_source
+rsync -avs ../badgemon-source/ ../flash/apps/badgemon_source
+cd ../flash/apps/badgemon_source
+rm -rf .git* .vscode/ design/ docs/ TODO.md LICENCE *.code-workspace *.gitignore README.md .env *.gitmodules flash.sh __pycache__
+find . -name '*.ase' | xargs rm
+find . -name '__pycache__' | xargs rm -rf
 cd ../../
 mpremote cp --recursive apps :
+cd ../badgemon-source
+rm -rf ../flash
+mpremote reset
