@@ -11,8 +11,43 @@ from system.eventbus import eventbus
 from events.input import ButtonDownEvent, BUTTON_TYPES
 from app import App, SASPPUApp
 
-from ctx import Context
 from ..util.misc import *
+
+import sasppu
+
+BOX_WIDTH = 80 # half of width
+BOX_HEIGHT = 120 # half of height
+ITEM_WIDTH = 80
+TITLE_WIDTH = 128
+
+STATE_CLOSED = 0
+STATE_CLOSING = 1
+STATE_OPEN = 2
+STATE_OPENING = 3
+
+BASE_BG1_X = -(120-BOX_WIDTH) + 8
+BASE_BG1_Y = -(120-BOX_HEIGHT) - 1
+
+LINE_HEIGHT = 20
+RESERVED_HEIGHT = LINE_HEIGHT*4
+RESERVED_START = sasppu.Background.HEIGHT - RESERVED_HEIGHT
+
+TITLE_START_X = 0
+TITLE_START_Y = RESERVED_START
+SUBTITLE_START_X = 128
+SUBTITLE_START_Y = RESERVED_START
+
+#----------------
+#TTTTTTT_44444444
+#1111111155555555
+#2222222266666666
+#3333333377777777
+
+#----------------
+#TTTTTTTTTTTTTTTT
+#SSSSSSSSSSSSSSSS
+#ACEGIKMOQSUWY___
+#BDFHJLNPRTVXZ___
 
 class ChoiceDialog:
     def _calc_sizes(self, ctx):
@@ -25,7 +60,7 @@ class ChoiceDialog:
         self._tree = choices
         self._app = app
         self._open = False
-        self._state = "CLOSED"
+        self._state = STATE_CLOSED
         
         self._previous_trees = []
         self._current_tree = self._tree
@@ -37,6 +72,86 @@ class ChoiceDialog:
         self.opened_event = asyncio.Event()
         self.closed_event = asyncio.Event()
         self.closed_event.set()
+        
+        self._text_update_needed = False
+
+    def _sasppu_init(self):
+        self.ms = sasppu.MainState()
+        self.ms.bind(False)
+        self.cs = sasppu.CMathState()
+        self.cs.bind(False)
+        self.bg = sasppu.Background()
+        self.bg.bind(1, False)
+        self.bg1 = sasppu.bg1
+
+        self.bg.windows = sasppu.WINDOW_ALL
+        self.bg.x = BASE_BG1_X
+        self.bg.y = BASE_BG1_Y
+        self.bg.flags = 0
+
+        self.ms.flags = sasppu.MainState.BG1_ENABLE | sasppu.MainState.CMATH_ENABLE
+        self.cs.flags = sasppu.CMathState.CMATH_ENABLE | sasppu.CMathState.SUB_SUB_SCREEN
+
+        self._write_bg1_map()
+
+        self._fill_hdma()
+
+    def _fill_hdma(self):
+        for i in range(240):
+            sasppu.hdma_7[i] = (sasppu.HDMA_NOOP, 0)
+        sasppu.hdma_enable |= 0x80
+        
+        height = int(self._opened_amount * BOX_HEIGHT)
+        box_top = 120 - height
+        box_end = 120 + height
+
+        ms_flags = self.ms.flags & (~sasppu.MainState.BG1_ENABLE) & 0xFF
+        ms_sub_col = sasppu.grey555(13)
+        cs_flags = self.cs.flags & (~sasppu.CMathState.CMATH_ENABLE) & 0xFF
+
+        sasppu.hdma_7[0] = (sasppu.HDMA_MAIN_STATE_FLAGS, ms_flags)
+        sasppu.hdma_7[1] = (sasppu.HDMA_CMATH_STATE_FLAGS, cs_flags)
+        sasppu.hdma_7[2] = (sasppu.HDMA_MAIN_STATE_SUBSCREEN_COLOUR, ms_sub_col)
+
+        sasppu.hdma_7[box_end] = (sasppu.HDMA_MAIN_STATE_FLAGS, ms_flags)
+        sasppu.hdma_7[box_end + 3] = (sasppu.HDMA_MAIN_STATE_SUBSCREEN_COLOUR, ms_sub_col)
+        sasppu.hdma_7[box_end + 5] = (sasppu.HDMA_CMATH_STATE_FLAGS, cs_flags)
+
+        ms_flags |= sasppu.MainState.BG1_ENABLE
+        ms_sub_col = sasppu.grey555(10)
+        cs_flags |= sasppu.CMathState.CMATH_ENABLE
+
+        sasppu.hdma_7[box_top - 5] = (sasppu.HDMA_CMATH_STATE_FLAGS, cs_flags)
+        sasppu.hdma_7[box_top - 3] = (sasppu.HDMA_MAIN_STATE_SUBSCREEN_COLOUR, ms_sub_col)
+        if box_top != box_end:
+            sasppu.hdma_7[box_top] = (sasppu.HDMA_MAIN_STATE_FLAGS, ms_flags)
+
+        self._set_bg1_scroll()
+
+    def _clear_hdma(self):
+        for i in range(240):
+            sasppu.hdma_7[i] = (sasppu.HDMA_NOOP, 0)
+        sasppu.hdma_enable &= 0x7F
+        self.ms.flags &= (~sasppu.MainState.BG1_ENABLE) & 0xFF
+        self.cs.flags &= (~sasppu.CMathState.CMATH_ENABLE) & 0xFF
+
+    def _set_bg1_scroll(self):
+        if self._current_line_visually == 1.5:
+            self.bg.y = BASE_BG1_Y + LINE_HEIGHT // 2
+        elif self._current_line_visually == self._current_line:
+            self.bg.y = BASE_BG1_Y + LINE_HEIGHT
+        else:
+            self.bg.y = int(BASE_BG1_Y + ((self._current_line_visually % 1.0) * LINE_HEIGHT))
+
+    def _write_bg1_map(self):
+        for y in range(RESERVED_HEIGHT // 8):
+            for x in range(sasppu.MAP_WIDTH):
+                end = ITEM_WIDTH // 8
+                index = x + (y * sasppu.MAP_WIDTH)
+                if x > end:
+                    self.bg1[index] = ((0x1FFFF - (sasppu.Background.WIDTH * 8) - 8) // 8) * 4
+                else:
+                    self.bg1[index] = (((x * 8) + (((y * 8) + RESERVED_START) * sasppu.Background.WIDTH)) // 8) * 4
 
     def is_open(self):
         return self._open
@@ -61,40 +176,55 @@ class ChoiceDialog:
 
     def set_choices(self, choices: ChoiceTree=(None, []), no_exit = False):
         self._tree = choices
-        if self._state != "CLOSED":
+        if self._state != STATE_CLOSED:
             self._previous_trees = []
             self._current_tree = self._tree
             self._selected = 0
             self._selected_visually = 0
         self._no_exit = no_exit
+        self._text_update_needed = True
         if no_exit:
             self.open()
+    
+    def _draw_text(self):
+        sasppu.fill_background(0, RESERVED_START, 256, RESERVED_HEIGHT, sasppu.TRANSPARENT_BLACK)
+        start_index = min(max(int(self._selected) - 4, 0), len(self._current_tree - 9))
+        for (i, choice) in enumerate(self._current_tree[start_index : start_index + 9]):
+            line = choice[0]
+            if line == "":
+                continue
+            width = sasppu.get_text_size(255, line, True)[0]
+            offset_left = (ITEM_WIDTH - width) // 2
+            start_x = (i // 3) * ITEM_WIDTH
+            start_y = (i // 3) * ITEM_hEIGHT
+            sasppu.draw_text_background(offset_left, RESERVED_START + (i * LINE_HEIGHT) - 12, sasppu.WHITE, width, line, True)
 
     def update(self, delta: float):
         if self.is_open():
-            if self._state == "CLOSED":
+            if self._state == STATE_CLOSED:
                 self._previous_trees = []
                 self._current_tree = self._tree
                 self._selected = 0
                 self._selected_visually = 0
-                self._state = "OPENING"
+                self._state = STATE_OPENING
                 self.closed_event.clear()
                 self.opened_event.clear()
                 self._opened_amount = 0.0
                 eventbus.on(ButtonDownEvent, self._handle_buttondown, self._app)
-            if self._state == "OPENING":
+            if self._state == STATE_OPENING:
                 if self._opened_amount > 0.99:
                     self._opened_amount = 1.0
-                    self._state = "OPEN"
+                    self._state = STATE_OPEN
                     self.opened_event.set()
                     return
                 weight = math.pow(0.8, (delta/10))
                 self._opened_amount = (self._opened_amount * (weight)) + (1-weight)
-            elif self._state == "CLOSING":
+            elif self._state == STATE_CLOSING:
                 if self._opened_amount < 0.01:
                     self._opened_amount = 0.0
-                    self._state = "CLOSED"
+                    self._state = STATE_CLOSED
                     self._open = False
+                    self._clear_hdma()
                     self.closed_event.set()
                     return
                 weight = math.pow(0.8, (delta/10))
@@ -113,39 +243,46 @@ class ChoiceDialog:
     def _draw_header_plane(self, ctx: Context, width: float):
         ctx.rgba(0.1, 0.1, 0.1, 0.5).rectangle((-80)*width, -100, (160)*width, 40).fill()
 
-    def _draw_text(self, ctx: Context, choice: str, ypos: int, select: bool, header: bool=False):        
-        if select:
-            col = ctx.rgb(1.0,0.3,0.0)
-        elif header:
-            col = ctx.rgb(1.0,0.9,0.9)
-        else:
-            col = ctx.gray(0.8)
-        col.move_to(0, ypos)\
-            .text(choice)
+    #def _draw_text(self, ctx: Context, choice: str, ypos: int, select: bool, header: bool=False):        
+    #    if select:
+    #        col = ctx.rgb(1.0,0.3,0.0)
+    #    elif header:
+    #        col = ctx.rgb(1.0,0.9,0.9)
+    #    else:
+    #        col = ctx.gray(0.8)
+    #    col.move_to(0, ypos)\
+    #        .text(choice)
 
-    def draw(self, ctx: Context):
+    def draw(self):
         if self.is_open():
-            ctx.save()
-            ctx.text_baseline = Context.MIDDLE
-            ctx.text_align = Context.CENTER
-            self._draw_focus_plane(ctx, self._opened_amount)
-            current_header = self._current_tree[0]
-            if current_header != "":
-                ctx.rectangle((-80)*self._opened_amount, -120, (160)*self._opened_amount, 240).clip()
-                self._draw_header_plane(ctx, self._opened_amount)
-                shrink_until_fit(ctx, current_header, 150, 30)
-                self._draw_text(ctx, current_header, -80, False, header=True)
-            ctx.rectangle((-80)*self._opened_amount, -60, (160)*self._opened_amount, 180).clip()
-            self._calc_sizes(ctx)
-            for i, choice in enumerate(self._current_tree[1]):
-                ctx.font_size = self._sizes[i]
-                ypos = self._get_pos(i)-self._selected_visually
-                if ypos < -80:
-                    continue
-                if ypos > 120:
-                    break
-                self._draw_text(ctx, choice[0], ypos, self._selected == i)
-            ctx.restore()
+            if self._text_update_needed:
+                self._text_update_needed = False
+                self._draw_text()
+            if self._state == STATE_OPENING or self._state == STATE_CLOSING:
+                self._fill_hdma()
+            if self._selected_visually != self._selected:
+                self._set_bg1_scroll()
+            #ctx.save()
+            #ctx.text_baseline = Context.MIDDLE
+            #ctx.text_align = Context.CENTER
+            #self._draw_focus_plane(ctx, self._opened_amount)
+            #current_header = self._current_tree[0]
+            #if current_header != "":
+            #    ctx.rectangle((-80)*self._opened_amount, -120, (160)*self._opened_amount, 240).clip()
+            #    self._draw_header_plane(ctx, self._opened_amount)
+            #    shrink_until_fit(ctx, current_header, 150, 30)
+            #    self._draw_text(ctx, current_header, -80, False, header=True)
+            #ctx.rectangle((-80)*self._opened_amount, -60, (160)*self._opened_amount, 180).clip()
+            #self._calc_sizes(ctx)
+            #for i, choice in enumerate(self._current_tree[1]):
+            #    ctx.font_size = self._sizes[i]
+            #    ypos = self._get_pos(i)-self._selected_visually
+            #    if ypos < -80:
+            #        continue
+            #    if ypos > 120:
+            #        break
+            #    self._draw_text(ctx, choice[0], ypos, self._selected == i)
+            #ctx.restore()
 
     def _handle_buttondown(self, event: ButtonDownEvent):
         if self.is_open():
@@ -173,12 +310,26 @@ class ChoiceDialog:
 
     def _cleanup(self):
         eventbus.remove(ButtonDownEvent, self._handle_buttondown, self._app)
-        self._state = "CLOSING"
+        self._state = STATE_CLOSING
         self.closed_event.clear()
         self.opened_event.clear()
 
 class ChoiceExample(SASPPUApp):
     def __init__(self):
+        super().__init__()
+        self.request_fast_updates = True
+        
+        sasppu.gfx_reset()
+        self.ms = sasppu.MainState()
+        self.ms.bind()
+        self.cs = sasppu.CMathState()
+        self.cs.bind()
+        self.bg0 = sasppu.Background()
+        self.bg0.bind(0)
+
+        self.ms.mainscreen_colour = sasppu.grey555_cmath(20)
+        sasppu.fill_background(0, 0, 256, 512, sasppu.BLUE)
+
         self._choice = ChoiceDialog(
             app=self,
             choices=("Choice Test",[("thing 1", lambda a: a._set_answer("1")),
@@ -205,6 +356,5 @@ class ChoiceExample(SASPPUApp):
             await asyncio.sleep(1)
             print("fps:", display.get_fps(), f"mem used: {gc.mem_alloc()}, mem free:{gc.mem_free()}")
 
-    def draw(self, ctx: Context):
-        self._draw_background(ctx)
-        self._choice.draw(ctx)
+    def draw(self):
+        self._choice.draw()
