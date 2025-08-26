@@ -15,9 +15,9 @@ from ..util.misc import *
 
 import sasppu
 
-BOX_WIDTH = 80 # half of width
+BOX_WIDTH = 64 # half of width
 BOX_HEIGHT = 120 # half of height
-ITEM_WIDTH = 80
+ITEM_WIDTH = 128
 TITLE_WIDTH = 128
 
 STATE_CLOSED = 0
@@ -26,7 +26,7 @@ STATE_OPEN = 2
 STATE_OPENING = 3
 
 BASE_BG1_X = -(120-BOX_WIDTH) + 8
-BASE_BG1_Y = -(120-BOX_HEIGHT) - 1
+BASE_BG1_Y = -(120-BOX_HEIGHT) - 40
 
 LINE_HEIGHT = 20
 RESERVED_HEIGHT = LINE_HEIGHT*4
@@ -36,6 +36,9 @@ TITLE_START_X = 0
 TITLE_START_Y = RESERVED_START
 SUBTITLE_START_X = 128
 SUBTITLE_START_Y = RESERVED_START
+
+SPARE_TILE_X = sasppu.Background.WIDTH - 8
+SPARE_TILE_Y = sasppu.Background.HEIGHT - 8
 
 #----------------
 #TTTTTTT_44444444
@@ -75,6 +78,8 @@ class ChoiceDialog:
         
         self._text_update_needed = False
 
+        self._sasppu_init()
+
     def _sasppu_init(self):
         self.ms = sasppu.MainState()
         self.ms.bind(False)
@@ -89,12 +94,14 @@ class ChoiceDialog:
         self.bg.y = BASE_BG1_Y
         self.bg.flags = 0
 
-        self.ms.flags = sasppu.MainState.BG1_ENABLE | sasppu.MainState.CMATH_ENABLE
-        self.cs.flags = sasppu.CMathState.CMATH_ENABLE | sasppu.CMathState.SUB_SUB_SCREEN
+        self.ms.flags = sasppu.MainState.BG1_ENABLE 
+
+        #self.ms.flags = sasppu.MainState.BG1_ENABLE | sasppu.MainState.CMATH_ENABLE
+        #self.cs.flags = sasppu.CMathState.CMATH_ENABLE | sasppu.CMathState.SUB_SUB_SCREEN
 
         self._write_bg1_map()
 
-        self._fill_hdma()
+        #self._fill_hdma()
 
     def _fill_hdma(self):
         for i in range(240):
@@ -126,30 +133,23 @@ class ChoiceDialog:
         if box_top != box_end:
             sasppu.hdma_7[box_top] = (sasppu.HDMA_MAIN_STATE_FLAGS, ms_flags)
 
-        self._set_bg1_scroll()
-
     def _clear_hdma(self):
         for i in range(240):
             sasppu.hdma_7[i] = (sasppu.HDMA_NOOP, 0)
-        sasppu.hdma_enable &= 0x7F
-        self.ms.flags &= (~sasppu.MainState.BG1_ENABLE) & 0xFF
-        self.cs.flags &= (~sasppu.CMathState.CMATH_ENABLE) & 0xFF
-
-    def _set_bg1_scroll(self):
-        if self._current_line_visually == 1.5:
-            self.bg.y = BASE_BG1_Y + LINE_HEIGHT // 2
-        elif self._current_line_visually == self._current_line:
-            self.bg.y = BASE_BG1_Y + LINE_HEIGHT
-        else:
-            self.bg.y = int(BASE_BG1_Y + ((self._current_line_visually % 1.0) * LINE_HEIGHT))
+        #sasppu.hdma_enable &= 0x7F
+        #self.ms.flags &= (~sasppu.MainState.BG1_ENABLE) & 0xFF
+        #self.cs.flags &= (~sasppu.CMathState.CMATH_ENABLE) & 0xFF
 
     def _write_bg1_map(self):
-        for y in range(RESERVED_HEIGHT // 8):
+        for y in range(RESERVED_HEIGHT // 4):
             for x in range(sasppu.MAP_WIDTH):
-                end = ITEM_WIDTH // 8
+                xend = ITEM_WIDTH // 8
+                yend = RESERVED_HEIGHT // 8
                 index = x + (y * sasppu.MAP_WIDTH)
-                if x > end:
-                    self.bg1[index] = ((0x1FFFF - (sasppu.Background.WIDTH * 8) - 8) // 8) * 4
+                if x >= xend:
+                    self.bg1[index] = (((SPARE_TILE_X) + ((SPARE_TILE_Y) * sasppu.Background.WIDTH)) // 8) * 4
+                elif y >= yend:
+                    self.bg1[index] = ((((x + xend) * 8) + ((((y - yend) * 8) + RESERVED_START) * sasppu.Background.WIDTH)) // 8) * 4
                 else:
                     self.bg1[index] = (((x * 8) + (((y * 8) + RESERVED_START) * sasppu.Background.WIDTH)) // 8) * 4
 
@@ -188,16 +188,26 @@ class ChoiceDialog:
     
     def _draw_text(self):
         sasppu.fill_background(0, RESERVED_START, 256, RESERVED_HEIGHT, sasppu.TRANSPARENT_BLACK)
-        start_index = min(max(int(self._selected) - 4, 0), len(self._current_tree - 9))
-        for (i, choice) in enumerate(self._current_tree[start_index : start_index + 9]):
+        width = sasppu.get_text_size(255, self._current_tree[0], True)[0]
+        offset_left = (ITEM_WIDTH - width) // 2
+        sasppu.draw_text_background(offset_left, RESERVED_START - 12, sasppu.WHITE, ITEM_WIDTH, self._current_tree[0], True)
+        start_index = max(min(int(self._selected) - 3, len(self._current_tree[1]) - 7), 0)
+        for (i, choice) in enumerate(self._current_tree[1][start_index : start_index + 7]):
             line = choice[0]
             if line == "":
                 continue
             width = sasppu.get_text_size(255, line, True)[0]
             offset_left = (ITEM_WIDTH - width) // 2
-            start_x = (i // 3) * ITEM_WIDTH
-            start_y = (i // 3) * ITEM_hEIGHT
-            sasppu.draw_text_background(offset_left, RESERVED_START + (i * LINE_HEIGHT) - 12, sasppu.WHITE, width, line, True)
+            start_y = (i * LINE_HEIGHT) + LINE_HEIGHT
+            if i >= 3:
+                offset_left += ITEM_WIDTH
+                start_y = ((i - 3) * LINE_HEIGHT)
+            if int(self._selected) == start_index + i:
+                colour = sasppu.rgb555(30,15,5)
+            else:
+                colour = sasppu.WHITE
+            sasppu.draw_text_background(offset_left, RESERVED_START + (start_y) - 12, colour, width, line, True)
+        sasppu.fill_background(SPARE_TILE_X, SPARE_TILE_Y, 8, 8, sasppu.GREEN)
 
     def update(self, delta: float):
         if self.is_open():
@@ -259,9 +269,11 @@ class ChoiceDialog:
                 self._text_update_needed = False
                 self._draw_text()
             if self._state == STATE_OPENING or self._state == STATE_CLOSING:
-                self._fill_hdma()
+                pass
+                #self._fill_hdma()
             if self._selected_visually != self._selected:
-                self._set_bg1_scroll()
+                pass
+                #self._set_bg1_scroll()
             #ctx.save()
             #ctx.text_baseline = Context.MIDDLE
             #ctx.text_align = Context.CENTER
@@ -293,7 +305,7 @@ class ChoiceDialog:
             if BUTTON_TYPES["CONFIRM"] in event.button or BUTTON_TYPES["RIGHT"] in event.button:
                 c = self._current_tree[1][self._selected][1]
                 if callable(c):
-                    c()
+                    c(self._app)
                     self._cleanup()
                     return
                 self._previous_trees.append(self._current_tree)
@@ -303,10 +315,10 @@ class ChoiceDialog:
                 if self._previous_trees:
                     self._current_tree = self._previous_trees.pop()
                     self._selected = 0
-                    return
-                if not self._no_exit:
+                elif not self._no_exit:
                     self._cleanup()
-                return
+                    return
+            self._text_update_needed = True
 
     def _cleanup(self):
         eventbus.remove(ButtonDownEvent, self._handle_buttondown, self._app)
@@ -329,26 +341,32 @@ class ChoiceExample(SASPPUApp):
 
         self.ms.mainscreen_colour = sasppu.grey555_cmath(20)
         sasppu.fill_background(0, 0, 256, 512, sasppu.BLUE)
+        sasppu.fill_background(0, RESERVED_START, 256, RESERVED_HEIGHT, sasppu.RED)
+        sasppu.fill_background(SPARE_TILE_X, SPARE_TILE_Y, 8, 8, sasppu.GREEN)
 
         self._choice = ChoiceDialog(
             app=self,
             choices=("Choice Test",[("thing 1", lambda a: a._set_answer("1")),
                      ("thing 2", lambda a: a._set_answer("2")),
                      ("thing 3", lambda a: a._set_answer("3")),
-                     ("more", ("More Options", [("thing 41", lambda a: a._set_answer("41")),
+                     ("thing 4", lambda a: a._set_answer("4")),
+                     ("thing 5", lambda a: a._set_answer("5")),
+                     ("thing 6", lambda a: a._set_answer("6")),
+                     ("moregyI", ("More Opts..", [("thing 41", lambda a: a._set_answer("41")),
                                ("thing 42", lambda a: a._set_answer("42"))]))])
         )
         self._answer = ""
         eventbus.on(ButtonDownEvent, self._handle_buttondown, self)
+        self._choice.open()
 
     def _handle_buttondown(self, event: ButtonDownEvent):
         self._choice.open()
 
     def _set_answer(self, str: str):
         self._answer = str
+        print(f"ANSWER: {self._answer}")
 
     def update(self, delta: float):
-        print(f"ANSWER: {self.answer}")
         self._choice.update(delta)
 
     async def background_task(self):
@@ -357,4 +375,5 @@ class ChoiceExample(SASPPUApp):
             print("fps:", display.get_fps(), f"mem used: {gc.mem_alloc()}, mem free:{gc.mem_free()}")
 
     def draw(self):
+        pass
         self._choice.draw()

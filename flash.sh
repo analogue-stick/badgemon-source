@@ -6,7 +6,7 @@ rm -rf .git* .vscode/ design/ docs/ TODO.md LICENCE *.code-workspace *.gitignore
 find . -name '*.ase' | xargs rm
 find . -name '__pycache__' | xargs rm -rf
 cd ../../
-mpremote cp --recursive apps :
+mpremote a0 cp --recursive apps :
 cd ../badgemon-source
 rm -rf ../flash
-mpremote reset
+mpremote a0 reset

@@ -2,5 +2,5 @@
 #__app_export__ = LoadingScreen
 #from .scenes.scene_manager import SceneManager
 #__app_export__ = SceneManager
-from .util.speech import SpeechExample
-__app_export__ = SpeechExample
+from .util.choice import ChoiceExample
+__app_export__ = ChoiceExample

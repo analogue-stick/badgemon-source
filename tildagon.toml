@@ -18,7 +18,7 @@ wifi_preference = false
 
 [entry]
 # The name of your entry point `Application` class
-class = "SpeechExample"
+class = "ChoiceExample"
 
 [metadata]
 # Your nickname.  Must be at most 32 characters!
