@@ -239,7 +239,9 @@ class SpeechExample(SASPPUApp):
     def __init__(self):
         super().__init__()
         self.request_fast_updates = True
-        
+
+        sasppu.forced_blank = True
+
         sasppu.gfx_reset()
         self.ms = sasppu.MainState()
         self.ms.bind()
@@ -263,6 +265,8 @@ class SpeechExample(SASPPUApp):
             speech=self.speeches[self.current_speech]
         )
         eventbus.on(ButtonDownEvent, self._handle_buttondown, self)
+
+        sasppu.forced_blank = False
 
     def _handle_buttondown(self, event: ButtonDownEvent):
         if not self._speech.is_open():

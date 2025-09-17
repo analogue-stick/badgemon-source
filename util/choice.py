@@ -330,7 +330,9 @@ class ChoiceExample(SASPPUApp):
     def __init__(self):
         super().__init__()
         self.request_fast_updates = True
-        
+
+        sasppu.forced_blank = True
+
         sasppu.gfx_reset()
         self.ms = sasppu.MainState()
         self.ms.bind()
@@ -358,6 +360,8 @@ class ChoiceExample(SASPPUApp):
         self._answer = ""
         eventbus.on(ButtonDownEvent, self._handle_buttondown, self)
         self._choice.open()
+
+        sasppu.forced_blank = False
 
     def _handle_buttondown(self, event: ButtonDownEvent):
         self._choice.open()
